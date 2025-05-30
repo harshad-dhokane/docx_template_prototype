@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Template Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .upload-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .upload-zone {
+            border: 2px dashed #4CAF50;
+            padding: 40px;
+            border-radius: 8px;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-zone:hover {
+            background-color: #f8f9fa;
+            border-color: #45a049;
+        }
+        .upload-zone.dragover {
+            background-color: #e8f5e9;
+            border-color: #2e7d32;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        #uploadForm {
+            margin-top: 20px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .info-text {
+            color: #666;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Document Template Manager</h1>
+    </div>
+    <div class="upload-container">
+        <h2>Upload Template</h2>
+        <p class="info-text">Upload a template (DOCX or XLSX) with placeholders in the format {{placeholderName}}</p>
+        
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+            <div class="upload-zone" id="dropZone">
+                <p>Drag and drop your DOCX or XLSX template here</p>
+                <p>or</p>
+                <label for="template" class="btn">Choose File</label>
+                <input type="file" id="template" name="template" accept=".docx,.xlsx" required>
+                <p id="fileName"></p>
+            </div>
+            <button type="submit" class="btn">Upload Template</button>
+        </form>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('template');
+        const fileName = document.getElementById('fileName');
+
+        // Handle drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.name.endsWith('.docx') || file.name.endsWith('.xlsx')) {
+                    fileInput.files = files;
+                    fileName.textContent = file.name;
+                } else {
+                    alert('Please upload a DOCX or XLSX file');
+                }
+            }
+        });
+
+        // Handle file selection
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileName.textContent = fileInput.files[0].name;
+            }
+        });
+    </script>
+</body>
+</html>

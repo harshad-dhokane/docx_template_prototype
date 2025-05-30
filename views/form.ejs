@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fill Template Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .form-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+        .form-group:hover {
+            border-color: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.1);
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.2);
+        }
+        .image-upload {
+            position: relative;
+        }
+        .image-upload-zone {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+        .image-upload-zone:hover {
+            border-color: #4CAF50;
+            background-color: #f8f9fa;
+        }
+        .image-upload-zone.dragover {
+            background-color: #e8f5e9;
+            border-color: #2e7d32;
+        }
+        .image-preview {
+            max-width: 150px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            min-width: 120px;
+        }
+        
+        form .btn {
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading:after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Fill Template Data - <%= templateName %></h1>
+    </div>
+    
+    <div class="form-container">
+        <form id="dataForm">
+            <input type="hidden" name="templateName" value="<%= templateName %>">
+            
+            <div class="form-grid">
+            <% placeholders.forEach(function(placeholder) { %>
+                <div class="form-group">
+                    <label for="<%= placeholder %>"><%= placeholder.replace(/([A-Z])/g, ' $1').trim() %>:</label>
+                      <% if (placeholder.toLowerCase().includes('image') || placeholder.toLowerCase().includes('logo') || placeholder.toLowerCase().includes('photo')) { %>
+                        <div class="image-upload">
+                            <div class="image-upload-zone" id="dropZone_<%= placeholder %>">
+                                <p>Drop image here or click to upload</p>
+                                <input type="file" 
+                                    id="<%= placeholder %>" 
+                                    accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                                    style="display: none;"
+                                    onchange="handleImageUpload(this, '<%= placeholder %>')"
+                                    required>
+                            </div>
+                            <img id="<%= placeholder %>Preview" class="image-preview">
+                            <input type="hidden" id="<%= placeholder %>Data" name="<%= placeholder %>Data">
+                        </div>
+                    <% } else if (placeholder.toLowerCase().includes('date')) { %>
+                        <input type="date" 
+                            id="<%= placeholder %>" 
+                            name="<%= placeholder %>" 
+                            class="form-control"
+                            value="<%= new Date().toISOString().split('T')[0] %>" 
+                            required>
+                    <% } else if (placeholder.toLowerCase().includes('email')) { %>
+                        <input type="email" 
+                            id="<%= placeholder %>" 
+                            name="<%= placeholder %>" 
+                            class="form-control"
+                            required>
+                    <% } else if (placeholder.toLowerCase().includes('number') || placeholder.toLowerCase().includes('amount')) { %>
+                        <input type="number" 
+                            id="<%= placeholder %>" 
+                            name="<%= placeholder %>" 
+                            class="form-control"
+                            required>
+                    <% } else { %>
+                        <input type="text" 
+                            id="<%= placeholder %>" 
+                            name="<%= placeholder %>" 
+                            class="form-control"
+                            required>
+                    <% } %>
+                </div>
+            <% }); %>            </div>
+              <% if (templateName.toLowerCase().endsWith('.xlsx')) { %>
+                <div style="display: flex; justify-content: center; margin-top: 20px;">
+                    <button type="submit" class="btn" style="max-width: 200px;">Download Excel</button>
+                </div>
+            <% } else { %>
+                <div style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;">
+                    <button type="submit" class="btn" style="flex: 1; max-width: 200px;">Download DOCX</button>
+                    <button type="submit" class="btn" style="flex: 1; max-width: 200px;">Download PDF</button>
+                </div>
+            <% } %>
+        </form>
+        
+        <div id="status"></div>
+        <div class="loading"></div>
+    </div>
+
+    <script>
+        // Handle image uploads
+        function handleImageUpload(input, placeholderName) {
+            const file = input.files[0];
+            if (file) {
+                // Convert image to PNG using canvas
+                const img = new Image();
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert to PNG
+                        const pngData = canvas.toDataURL('image/png');
+                        
+                        // Show preview
+                        const preview = document.getElementById(`${placeholderName}Preview`);
+                        preview.src = pngData;
+                        preview.style.display = 'block';
+                        
+                        // Store the PNG data
+                        document.getElementById(`${placeholderName}Data`).value = pngData;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Setup drag and drop for each image upload zone
+        document.querySelectorAll('.image-upload-zone').forEach(zone => {
+            const input = zone.querySelector('input[type="file"]');
+            const placeholder = input.id;
+            
+            zone.addEventListener('click', () => input.click());
+            
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    input.files = e.dataTransfer.files;
+                    handleImageUpload(input, placeholder);
+                }
+            });
+        });
+
+        // Handle form submission
+        document.getElementById('dataForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const clickedButton = e.submitter;
+            const downloadType = clickedButton.textContent.includes('DOCX') ? 'docx' : 'pdf';
+            
+            const form = e.target;
+            const status = document.getElementById('status');
+            const loading = document.querySelector('.loading');
+            
+            try {
+                loading.style.display = 'block';
+                clickedButton.disabled = true;
+                status.style.display = 'none';
+
+                const formData = {};
+                new FormData(form).forEach((value, key) => {
+                    if (!key.endsWith('Data')) {
+                        formData[key] = value;
+                    }
+                });
+
+                document.querySelectorAll('input[type="hidden"]').forEach(input => {
+                    if (input.id.endsWith('Data') && input.value) {
+                        const placeholder = input.id.replace('Data', '');
+                        const [, base64Data] = input.value.split(',');
+                        
+                        formData[placeholder] = {
+                            _type: 'image',
+                            source: base64Data,
+                            format: 'png',
+                            width: 200,
+                            height: 200,
+                            altText: `${placeholder}`
+                        };
+                    }
+                });
+
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateName: formData.templateName,
+                        formData: formData
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const result = await response.json();
+                console.log('Server response:', result);                if (result.fileType === 'docx') {
+                    const filename = downloadType === 'docx' ? 
+                        result.docxPath.split('\\').pop() : 
+                        result.pdfPath.split('\\').pop();
+                        
+                    window.location.href = `/download/${downloadType}/${filename}`;
+                } else if (result.fileType === 'excel') {
+                    const filename = result.filePath.split('\\').pop();
+                    window.location.href = `/download/excel/${filename}`;
+                }
+
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                status.className = 'error';
+                status.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                clickedButton.disabled = false;
+            }
+        });
+
+    </script>
+</body>
+</html>
