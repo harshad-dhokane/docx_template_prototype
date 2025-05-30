@@ -7,6 +7,7 @@ import { TemplateHandler, MimeType } from 'easy-template-x';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as ExcelJS from 'exceljs';
+import { downloadHandler } from './routes/download';
 
 const execAsync = promisify(exec);
 const app = express();
@@ -193,7 +194,7 @@ app.post('/generate', async (req, res) => {
       await processExcelTemplate(templatePath, outputExcel, formData);
       res.json({ 
         message: 'Excel file generated successfully',
-        filePath: outputExcel,
+        filename: `generated-${timestamp}.xlsx`,
         fileType: 'excel'
       });
     } else if (fileExt === '.docx') {
@@ -224,8 +225,10 @@ app.post('/generate', async (req, res) => {
         }
       });
 
-      const outputDocx = path.join(DIRS.generatedDocx, `generated-${timestamp}.docx`);
-      const outputPdf = path.join(DIRS.generatedPdf, `generated-${timestamp}.pdf`);
+      const docxFilename = `generated-${timestamp}.docx`;
+      const pdfFilename = `generated-${timestamp}.pdf`;
+      const outputDocx = path.join(DIRS.generatedDocx, docxFilename);
+      const outputPdf = path.join(DIRS.generatedPdf, pdfFilename);
 
       // Read template as buffer
       const templateContent = await fs.promises.readFile(templatePath);
@@ -235,20 +238,21 @@ app.post('/generate', async (req, res) => {
       const doc = await handler.process(templateContent, formData);
 
       // Save generated DOCX
-      await fs.promises.writeFile(outputDocx, doc);      // Convert to PDF
+      await fs.promises.writeFile(outputDocx, doc);      
+      // Convert to PDF
       await convertToPdf(outputDocx, outputPdf);
       
       // Debug log
       console.log('Generated files:', {
-        docxPath: outputDocx,
-        pdfPath: outputPdf,
+        docxFilename,
+        pdfFilename,
         fileType: 'docx'
       });
       
       res.json({ 
         message: 'Files generated successfully',
-        docxPath: outputDocx,
-        pdfPath: outputPdf,
+        docxFilename,
+        pdfFilename,
         fileType: 'docx'
       });
     } else {
@@ -260,44 +264,8 @@ app.post('/generate', async (req, res) => {
   }
 });
 
-// Import type for route parameters
-interface DownloadParams {
-  type: 'pdf' | 'excel' | 'docx';
-  filename: string;
-}
-
-// Download generated file
-app.get<DownloadParams, any, any>('/download/:type/:filename', (req, res) => {
-  try {
-    const { type, filename } = req.params;
-    let filePath: string;
-    
-    switch (type) {
-      case 'pdf':
-        filePath = path.join(DIRS.generatedPdf, filename);
-        break;
-      case 'excel':
-        filePath = path.join(DIRS.generatedExcel, filename);
-        break;
-      case 'docx':
-        filePath = path.join(DIRS.generatedDocx, filename);
-        break;
-      default:
-        res.status(400).send('Invalid file type');
-        return;
-    }
-    
-    if (!fs.existsSync(filePath)) {
-      res.status(404).send('File not found');
-      return;
-    }
-    
-    res.download(filePath);
-  } catch (error: any) {
-    console.error('Error downloading file:', error);
-    res.status(500).send(error.message);
-  }
-});
+// Download route handler
+app.get('/download/:type/:filename', downloadHandler);
 
 // Function to convert DOCX to PDF using LibreOffice
 async function convertToPdf(inputPath: string, outputPath: string): Promise<void> {

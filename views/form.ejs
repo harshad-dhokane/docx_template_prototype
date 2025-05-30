@@ -330,18 +330,33 @@
 
                 if (!response.ok) {
                     throw new Error(await response.text());
-                }
-
-                const result = await response.json();
-                console.log('Server response:', result);                if (result.fileType === 'docx') {
-                    const filename = downloadType === 'docx' ? 
-                        result.docxPath.split('\\').pop() : 
-                        result.pdfPath.split('\\').pop();
-                        
-                    window.location.href = `/download/${downloadType}/${filename}`;
-                } else if (result.fileType === 'excel') {
-                    const filename = result.filePath.split('\\').pop();
-                    window.location.href = `/download/excel/${filename}`;
+                }                const result = await response.json();
+                console.log('Server response:', result);                    if (result.fileType === 'docx') {
+                    const filename = downloadType === 'docx' ? result.docxFilename : result.pdfFilename;
+                    console.log('Downloading file:', { type: downloadType, filename });
+                    
+                    // Create an iframe to handle the download
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = `/download/${downloadType}/${filename}`;
+                    document.body.appendChild(iframe);
+                    
+                    // Remove the iframe after a delay
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 2000);                } else if (result.fileType === 'excel') {
+                    console.log('Downloading Excel file:', result.filename);
+                    
+                    // Create an iframe to handle the download
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = `/download/excel/${result.filename}`;
+                    document.body.appendChild(iframe);
+                    
+                    // Remove the iframe after a delay
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 2000);
                 }
 
             } catch (error) {
