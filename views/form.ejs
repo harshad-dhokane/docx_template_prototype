@@ -108,6 +108,23 @@
         .btn:hover {
             background-color: #45a049;
         }
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+            margin: 0 10px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+            border-color: #0056b3;
+            text-decoration: none;
+            color: white;
+        }
         .loading {
             display: none;
             text-align: center;
@@ -143,6 +160,33 @@
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+        .download-links {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f1f1f1;
+        }
+        .download-links p {
+            margin: 0 0 10px;
+        }
+        .download-links a {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .download-links a:hover {
+            background-color: #0056b3;
+        }
+        #downloadLinks {
+            margin-top: 20px;
+            text-align: center;
         }
     </style>
 </head>
@@ -200,21 +244,22 @@
                             required>
                     <% } %>
                 </div>
-            <% }); %>            </div>
-              <% if (templateName.toLowerCase().endsWith('.xlsx')) { %>
-                <div style="display: flex; justify-content: center; margin-top: 20px;">
-                    <button type="submit" class="btn" style="max-width: 200px;">Download Excel</button>
-                </div>
-            <% } else { %>
-                <div style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;">
-                    <button type="submit" class="btn" style="flex: 1; max-width: 200px;">Download DOCX</button>
-                    <button type="submit" class="btn" style="flex: 1; max-width: 200px;">Download PDF</button>
-                </div>
-            <% } %>
+            <% }); %>            </div>              <div style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;" id="buttonContainer">
+                <% if (templateName.toLowerCase().endsWith('.xlsx')) { %>
+                    <button type="submit" class="btn download-btn" data-type="excel" style="flex: 1; max-width: 200px;">Download Excel</button>
+                    <button type="submit" class="btn download-btn" data-type="pdf" style="flex: 1; max-width: 200px;">Download PDF</button>
+                <% } else { %>
+                    <button type="submit" class="btn download-btn" data-type="docx" style="flex: 1; max-width: 200px;">Download DOCX</button>
+                    <button type="submit" class="btn download-btn" data-type="pdf" style="flex: 1; max-width: 200px;">Download PDF</button>
+                <% } %>
+              </div>
         </form>
         
         <div id="status"></div>
         <div class="loading"></div>
+          <div id="downloadSection" class="download-links">
+            <div id="downloadLinks"></div>
+        </div>
     </div>
 
     <script>
@@ -277,30 +322,32 @@
                     handleImageUpload(input, placeholder);
                 }
             });
-        });
-
-        // Handle form submission
+        });        // Handle form submission
         document.getElementById('dataForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const clickedButton = e.submitter;
-            const downloadType = clickedButton.textContent.includes('DOCX') ? 'docx' : 'pdf';
+            const downloadType = clickedButton.dataset.type;
             
             const form = e.target;
             const status = document.getElementById('status');
             const loading = document.querySelector('.loading');
+            const buttonContainer = document.getElementById('buttonContainer');
             
             try {
                 loading.style.display = 'block';
-                clickedButton.disabled = true;
+                // Disable all download buttons during processing
+                const downloadButtons = document.querySelectorAll('.download-btn');
+                downloadButtons.forEach(btn => btn.disabled = true);
                 status.style.display = 'none';
 
                 const formData = {};
-                new FormData(form).forEach((value, key) => {
-                    if (!key.endsWith('Data')) {
-                        formData[key] = value;
-                    }
+                const fields = document.querySelectorAll('.form-control');
+                fields.forEach(field => {
+                    const input = field;
+                    formData[input.id] = input.value;
                 });
 
+                // Handle image data if present
                 document.querySelectorAll('input[type="hidden"]').forEach(input => {
                     if (input.id.endsWith('Data') && input.value) {
                         const placeholder = input.id.replace('Data', '');
@@ -323,41 +370,36 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        templateName: formData.templateName,
-                        formData: formData
+                        templateName: '<%= templateName %>',
+                        formData
                     })
                 });
 
                 if (!response.ok) {
                     throw new Error(await response.text());
-                }                const result = await response.json();
-                console.log('Server response:', result);                    if (result.fileType === 'docx') {
-                    const filename = downloadType === 'docx' ? result.docxFilename : result.pdfFilename;
-                    console.log('Downloading file:', { type: downloadType, filename });
-                    
-                    // Create an iframe to handle the download
-                    const iframe = document.createElement('iframe');
-                    iframe.style.display = 'none';
-                    iframe.src = `/download/${downloadType}/${filename}`;
-                    document.body.appendChild(iframe);
-                    
-                    // Remove the iframe after a delay
-                    setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 2000);                } else if (result.fileType === 'excel') {
-                    console.log('Downloading Excel file:', result.filename);
-                    
-                    // Create an iframe to handle the download
-                    const iframe = document.createElement('iframe');
-                    iframe.style.display = 'none';
-                    iframe.src = `/download/excel/${result.filename}`;
-                    document.body.appendChild(iframe);
-                    
-                    // Remove the iframe after a delay
-                    setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 2000);
                 }
+
+                const result = await response.json();
+                console.log('Server response:', result);
+
+                // Create an iframe to handle the download based on the button clicked
+                const filename = downloadType === 'pdf' ? result.pdfFilename : 
+                               downloadType === 'excel' ? result.excelFilename : 
+                               result.docxFilename;
+
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = `/download/${downloadType}/${filename}`;
+                document.body.appendChild(iframe);
+
+                // Remove the iframe after a delay
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 2000);
+
+                status.textContent = 'File generated successfully!';
+                status.className = 'success';
+                status.style.display = 'block';
 
             } catch (error) {
                 status.textContent = 'Error: ' + error.message;
@@ -365,7 +407,9 @@
                 status.style.display = 'block';
             } finally {
                 loading.style.display = 'none';
-                clickedButton.disabled = false;
+                // Re-enable all download buttons after processing
+                const downloadButtons = document.querySelectorAll('.download-btn');
+                downloadButtons.forEach(btn => btn.disabled = false);
             }
         });
 

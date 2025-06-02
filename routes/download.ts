@@ -8,32 +8,78 @@ const DIRS = {
   generatedExcel: path.resolve(__dirname, '..', 'output-generated', 'excel')
 };
 
+// Validate that directories exist
+Object.values(DIRS).forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    console.error(`Directory does not exist: ${dir}`);
+  }
+});
+
 interface DownloadParams {
   type: 'pdf' | 'excel' | 'docx';
   filename: string;
 }
 
+// MIME types for different file formats
+const MIME_TYPES = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
+// Output directories by file type
+const OUTPUT_DIRS = {
+  pdf: 'generatedPdf',
+  excel: 'generatedExcel',
+  docx: 'generatedDocx'
+};
+
 export const downloadHandler: RequestHandler<DownloadParams> = (req, res) => {
   try {
     const { type, filename } = req.params;
     console.log('Download request:', { type, filename });
+    
+    // Additional validation
+    if (!type || !filename) {
+      console.error('Missing parameters:', { type, filename });
+      res.status(400).send('Missing parameters');
+      return;
+    }
+
+    // For safety, clean the filename
+    const cleanFilename = path.basename(filename);
+    console.log('Cleaned filename:', cleanFilename);
     let filePath;
     
+    // Validate file type and get the correct directory
+    let targetDir;
     switch (type) {
       case 'pdf':
-        filePath = path.join(DIRS.generatedPdf, filename);
+        targetDir = DIRS.generatedPdf;
         break;
       case 'excel':
-        filePath = path.join(DIRS.generatedExcel, filename);
+        targetDir = DIRS.generatedExcel;
         break;
       case 'docx':
-        filePath = path.join(DIRS.generatedDocx, filename);
+        targetDir = DIRS.generatedDocx;
         break;
       default:
         console.error('Invalid file type:', type);
         res.status(400).send('Invalid file type');
         return;
     }
+    
+    // Check if directory exists
+    if (!fs.existsSync(targetDir)) {
+      console.error('Directory not found:', targetDir);
+      res.status(500).send('Server configuration error');
+      return;
+    }
+    
+    filePath = path.join(targetDir, filename);
+    
+    // Log the absolute path being checked
+    console.log('Looking for file at:', filePath);
 
     console.log('Attempting to download file:', filePath);
     
@@ -43,13 +89,11 @@ export const downloadHandler: RequestHandler<DownloadParams> = (req, res) => {
       return;
     }
 
-    console.log('File exists, sending download...');
-    
-    // Set the appropriate headers
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'pdf' ? 'application/pdf' : 
-                                type === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-                                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    console.log('File exists, sending download...');    // Set the appropriate headers with proper encoding for filenames
+    const encodedFilename = encodeURIComponent(filename);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}`);
+    res.setHeader('Content-Type', MIME_TYPES[type]);
+    res.setHeader('Content-Length', fs.statSync(filePath).size);
     
     // Stream the file
     const fileStream = fs.createReadStream(filePath);

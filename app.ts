@@ -97,35 +97,94 @@ async function findExcelPlaceholders(filePath: string): Promise<Set<string>> {
   return placeholders;
 }
 
+// Function to prepare Excel file for PDF conversion - now just preserves the original format
+async function prepareExcelForPdf(workbook: ExcelJS.Workbook): Promise<void> {
+  // No modifications to preserve original Excel structure
+  return;
+}
+
 // Function to replace placeholders in Excel file
 async function processExcelTemplate(templatePath: string, outputPath: string, formData: any): Promise<void> {
+  // First load the template to capture all original formatting
+  const templateWorkbook = new ExcelJS.Workbook();
+  await templateWorkbook.xlsx.readFile(templatePath);
+  
+  // Create a new workbook for processing while preserving all formatting
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(templatePath);
   const placeholderRegex = /{{([^}]+)}}/g;
 
-  workbook.worksheets.forEach(worksheet => {
-    worksheet.eachRow((row) => {
-      row.eachCell((cell) => {
-        if (typeof cell.value === 'string') {
-          let cellValue = cell.value as string;
-          let hasPlaceholder = false;
-          
-          // Replace all placeholders in the cell
-          cellValue = cellValue.replace(placeholderRegex, (match, placeholder) => {
-            hasPlaceholder = true;
-            return formData[placeholder] || match;
-          });
+  workbook.worksheets.forEach((worksheet, sheetIndex) => {
+    const templateSheet = templateWorkbook.worksheets[sheetIndex];
 
-          if (hasPlaceholder) {
-            // Preserve the cell style while updating the value
-            const style = { ...cell.style };
-            cell.value = cellValue;
-            cell.style = style;
+    // Preserve exact column widths
+    worksheet.columns = templateSheet.columns.map(col => ({
+      ...col,
+      width: col.width // Explicitly preserve width
+    }));
+
+    worksheet.eachRow((row, rowNumber) => {
+      const templateRow = templateSheet.getRow(rowNumber);
+      
+      // Preserve row dimensions and properties
+      row.height = templateRow.height;
+      row.hidden = templateRow.hidden;
+      row.outlineLevel = templateRow.outlineLevel;
+      
+      row.eachCell((cell, colNumber) => {
+        const templateCell = templateRow.getCell(colNumber);
+        
+        // Keep the original style reference
+        const originalStyle = JSON.parse(JSON.stringify(templateCell.style));
+        
+        if (typeof cell.value === 'string') {
+          const cellValue = cell.value;
+          if (cellValue.match(placeholderRegex)) {
+            // Replace placeholders while preserving data types
+            const newValue = cellValue.replace(placeholderRegex, (match, placeholder) => {
+              const value = formData[placeholder];
+              
+              if (value === undefined) return match;
+              
+              // Preserve data types
+              if (typeof value === 'string') {
+                // Handle dates
+                if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+                  return new Date(value);
+                }
+                // Handle numbers
+                if (!isNaN(Number(value)) && value.trim() !== '') {
+                  return Number(value);
+                }
+              }
+              
+              return value;
+            });
+            
+            cell.value = newValue;
           }
         }
+        
+        // Always restore the exact original style
+        cell.style = originalStyle;
       });
     });
+
+    // Preserve worksheet-level properties
+    worksheet.properties = JSON.parse(JSON.stringify(templateSheet.properties));
+    worksheet.pageSetup = JSON.parse(JSON.stringify(templateSheet.pageSetup));
+    
+    // Preserve column width settings explicitly
+    templateSheet.columns.forEach((col, index) => {
+      if (col && col.width) {
+        worksheet.getColumn(index + 1).width = col.width;
+      }
+    });
   });
+
+  // Set workbook properties and views from template
+  workbook.properties = JSON.parse(JSON.stringify(templateWorkbook.properties));
+  workbook.views = JSON.parse(JSON.stringify(templateWorkbook.views));
 
   await workbook.xlsx.writeFile(outputPath);
 }
@@ -187,14 +246,21 @@ app.post('/generate', async (req, res) => {
     const fileExt = path.extname(templateName).toLowerCase();
     const templatePath = path.join(DIRS.templates, templateName);
     const timestamp = new Date().getTime();
-    
-    if (fileExt === '.xlsx') {
+      if (fileExt === '.xlsx') {
       // Handle Excel template
       const outputExcel = path.join(DIRS.generatedExcel, `generated-${timestamp}.xlsx`);
+      const outputPdf = path.join(DIRS.generatedPdf, `generated-${timestamp}.pdf`);
+      
+      // Process template with form data
       await processExcelTemplate(templatePath, outputExcel, formData);
+      
+      // Convert to PDF
+      await convertExcelToPdf(outputExcel, outputPdf);
+      
       res.json({ 
-        message: 'Excel file generated successfully',
-        filename: `generated-${timestamp}.xlsx`,
+        message: 'Files generated successfully',
+        excelFilename: `generated-${timestamp}.xlsx`,
+        pdfFilename: `generated-${timestamp}.pdf`,
         fileType: 'excel'
       });
     } else if (fileExt === '.docx') {
@@ -292,6 +358,81 @@ async function convertToPdf(inputPath: string, outputPath: string): Promise<void
     throw new Error(`PDF conversion error: ${error.message}`);
   }
 }
+
+// Function to convert Excel to PDF using LibreOffice
+async function convertExcelToPdf(inputPath: string, outputPath: string): Promise<void> {
+  try {
+    const absoluteInputPath = path.resolve(inputPath);
+    const absoluteOutputDir = path.resolve(path.dirname(outputPath));
+    
+    console.log('Converting Excel to PDF:');
+    console.log('Input path:', absoluteInputPath);
+    console.log('Output directory:', absoluteOutputDir);
+    
+    if (!fs.existsSync(absoluteInputPath)) {
+      throw new Error(`Input file not found: ${absoluteInputPath}`);
+    }
+    
+    if (!fs.existsSync(absoluteOutputDir)) {
+      fs.mkdirSync(absoluteOutputDir, { recursive: true });
+    }
+
+    // Construct a simpler, more reliable command
+    const command = `soffice --headless --convert-to pdf --outdir "${absoluteOutputDir}" "${absoluteInputPath}"`;
+    console.log('Executing command:', command);
+
+    const { stdout, stderr } = await execAsync(command);
+    console.log('Conversion output:', stdout);
+    if (stderr) {
+      console.error('Conversion errors:', stderr);
+    }
+    
+    const expectedPdfPath = path.join(absoluteOutputDir, path.basename(absoluteInputPath, '.xlsx') + '.pdf');
+    console.log('Expected PDF path:', expectedPdfPath);
+
+    // Wait a short time to ensure file system has completed writing
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    if (!fs.existsSync(expectedPdfPath)) {
+      throw new Error(`PDF file was not created at expected path: ${expectedPdfPath}`);
+    }
+
+    console.log('PDF conversion completed successfully');
+  } catch (error: any) {
+    console.error('Detailed conversion error:', error);
+    throw new Error(`Excel to PDF conversion error: ${error.message}`);
+  }
+}
+
+// Function to cleanup old generated files
+function cleanupGeneratedFiles(maxAgeHours: number = 1): void {
+  const now = Date.now();
+  const maxAge = maxAgeHours * 60 * 60 * 1000; // Convert hours to milliseconds
+
+  // Clean each output directory
+  ['generatedDocx', 'generatedPdf', 'generatedExcel'].forEach(dirKey => {
+    const dir = DIRS[dirKey as keyof typeof DIRS];
+    if (fs.existsSync(dir)) {
+      fs.readdirSync(dir).forEach(file => {
+        const filePath = path.join(dir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (now - stats.mtimeMs > maxAge) {
+          try {
+            fs.unlinkSync(filePath);
+            console.log(`Cleaned up old file: ${filePath}`);
+          } catch (error) {
+            console.error(`Error cleaning up file ${filePath}:`, error);
+          }
+        }
+      });
+    }
+  });
+}
+
+// Run cleanup on server start and every 12 hours
+cleanupGeneratedFiles();
+setInterval(() => cleanupGeneratedFiles(), 12 * 60 * 60 * 1000);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
